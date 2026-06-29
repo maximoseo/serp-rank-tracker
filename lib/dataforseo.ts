@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/db-types";
 
 export interface SerpTask {
   keyword: string;
@@ -15,6 +16,16 @@ export interface SerpResult {
   rank_absolute: number | null;
   url: string | null;
   search_volume: number | null;
+  serp_snapshot: SerpSnapshotItem[];
+}
+
+export interface SerpSnapshotItem {
+  type: string;
+  rank_absolute: number;
+  url: string | null;
+  title: string | null;
+  description: string | null;
+  domain: string | null;
 }
 
 export interface ResearchKeyword {
@@ -73,19 +84,19 @@ export async function checkKeywordsBatch(
         location_code: number;
         language_code: string;
       }>;
-      result: Array<
-        | Array<{
-            keyword: string;
-            items: Array<{
-              type: string;
-              rank_absolute: number;
-              url: string;
-            }>;
-            se_results_count: number;
-          }>
-        | null
-        | undefined
-      >;
+      result: Array<{
+        keyword: string;
+        type: string;
+        items: Array<{
+          type: string;
+          rank_absolute: number;
+          url?: string;
+          domain?: string;
+          title?: string;
+          description?: string;
+        }>;
+        se_results_count: number;
+      } | null>;
       status_code: number;
       status_message: string;
     }>;
@@ -95,7 +106,6 @@ export async function checkKeywordsBatch(
 
   for (const task of data.tasks) {
     const taskData = task.data[0];
-    const taskResult = task.result?.[0];
 
     const matchingTask = tasks.find(
       (t) =>
@@ -108,24 +118,33 @@ export async function checkKeywordsBatch(
 
     let rank_absolute: number | null = null;
     let url: string | null = null;
+    const snapshot: SerpSnapshotItem[] = [];
 
-    if (taskResult && Array.isArray(taskResult)) {
-      for (const result of taskResult) {
-        if (!result || !result.items) continue;
-        for (const item of result.items) {
-          if (
-            item.type === "organic" &&
-            item.url &&
-            urlMatchesDomain(item.url, matchingTask.domain)
-          ) {
-            rank_absolute = item.rank_absolute;
-            url = item.url;
-            break;
-          }
+    for (const taskResult of task.result ?? []) {
+      if (!taskResult || !taskResult.items) continue;
+      for (const item of taskResult.items) {
+        const itemUrl = item.url ?? (item.domain ? `https://${item.domain}/` : null);
+        const itemDomain = item.domain ?? (itemUrl ? extractDomain(itemUrl) : null);
+
+        if (itemUrl && urlMatchesDomain(itemUrl, matchingTask.domain)) {
+          rank_absolute = item.rank_absolute;
+          url = itemUrl;
         }
-        if (rank_absolute) break;
+
+        if (snapshot.length < 10 && (item.type === "organic" || item.type === "local_pack")) {
+          snapshot.push({
+            type: item.type,
+            rank_absolute: item.rank_absolute,
+            url: itemUrl ?? null,
+            title: item.title ?? null,
+            description: item.description ?? null,
+            domain: itemDomain,
+          });
+        }
       }
     }
+
+    snapshot.sort((a, b) => a.rank_absolute - b.rank_absolute);
 
     results.push({
       keyword_id: matchingTask.keyword_id,
@@ -133,6 +152,7 @@ export async function checkKeywordsBatch(
       rank_absolute,
       url,
       search_volume: null,
+      serp_snapshot: snapshot,
     });
   }
 
@@ -146,6 +166,14 @@ export function urlMatchesDomain(url: string, domain: string): boolean {
     return hostname === targetDomain || hostname.endsWith(`.${targetDomain}`);
   } catch {
     return false;
+  }
+}
+
+export function extractDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
   }
 }
 
@@ -237,6 +265,7 @@ export async function saveRankings(results: SerpResult[]) {
     url: result.url,
     search_volume: result.search_volume,
     checked_at: new Date().toISOString(),
+    serp_snapshot: result.serp_snapshot as unknown as Json,
   }));
 
   const { error } = await supabase.from("rankings").insert(rows);
@@ -244,6 +273,56 @@ export async function saveRankings(results: SerpResult[]) {
   if (error) {
     throw new Error(`Failed to save rankings: ${error.message}`);
   }
+}
+
+export async function fetchSearchVolumes(
+  keywords: string[],
+  locationCode: number,
+  languageCode: string
+): Promise<Map<string, number | null>> {
+  if (keywords.length === 0) return new Map();
+
+  const response = await fetch(
+    "https://api.dataforseo.com/v3/keywords_data/google/search_volume/live",
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify([
+        {
+          keywords,
+          location_code: locationCode,
+          language_code: languageCode,
+        },
+      ]),
+      next: { revalidate: 0 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `DataForSEO Search Volume API error: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    tasks: Array<{
+      result: Array<{
+        keyword: string;
+        search_volume: number | null;
+      } | null>;
+    }>;
+  };
+
+  const volumes = new Map<string, number | null>();
+
+  for (const task of data.tasks) {
+    for (const item of task.result ?? []) {
+      if (!item) continue;
+      volumes.set(item.keyword, item.search_volume ?? null);
+    }
+  }
+
+  return volumes;
 }
 
 export function chunkArray<T>(array: T[], size: number): T[][] {

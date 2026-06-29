@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import {
   checkKeywordsBatch,
   chunkArray,
+  fetchSearchVolumes,
   saveRankings,
   type SerpTask,
 } from "@/lib/dataforseo";
@@ -47,7 +48,22 @@ export async function POST(request: Request) {
 
   for (const batch of batches) {
     try {
-      const results = await checkKeywordsBatch(batch);
+      const [results, volumes] = await Promise.all([
+        checkKeywordsBatch(batch),
+        fetchSearchVolumes(
+          batch.map((t) => t.keyword),
+          batch[0]?.location_code ?? 2840,
+          batch[0]?.language_code ?? "en"
+        ),
+      ]);
+
+      for (const result of results) {
+        const task = batch.find((t) => t.keyword_id === result.keyword_id);
+        if (task) {
+          result.search_volume = volumes.get(task.keyword) ?? null;
+        }
+      }
+
       await saveRankings(results);
       totalResults += results.length;
     } catch (error) {

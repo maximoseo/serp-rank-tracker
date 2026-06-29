@@ -84,6 +84,7 @@ export type Database = {
           url: string | null;
           search_volume: number | null;
           checked_at: string;
+          serp_snapshot: Json | null;
         };
         Insert: {
           id?: string;
@@ -92,6 +93,7 @@ export type Database = {
           url?: string | null;
           search_volume?: number | null;
           checked_at?: string;
+          serp_snapshot?: Json | null;
         };
         Update: {
           id?: string;
@@ -100,6 +102,7 @@ export type Database = {
           url?: string | null;
           search_volume?: number | null;
           checked_at?: string;
+          serp_snapshot?: Json | null;
         };
         Relationships: [
           {

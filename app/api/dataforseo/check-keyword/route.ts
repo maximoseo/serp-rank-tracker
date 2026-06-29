@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   checkKeywordsBatch,
+  fetchSearchVolumes,
   saveRankings,
   type SerpTask,
 } from "@/lib/dataforseo";
@@ -75,7 +76,22 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const results = await checkKeywordsBatch(tasks);
+    const [results, volumes] = await Promise.all([
+      checkKeywordsBatch(tasks),
+      fetchSearchVolumes(
+        tasks.map((t) => t.keyword),
+        tasks[0]?.location_code ?? 2840,
+        tasks[0]?.language_code ?? "en"
+      ),
+    ]);
+
+    for (const result of results) {
+      const task = tasks.find((t) => t.keyword_id === result.keyword_id);
+      if (task) {
+        result.search_volume = volumes.get(task.keyword) ?? null;
+      }
+    }
+
     await saveRankings(results);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
