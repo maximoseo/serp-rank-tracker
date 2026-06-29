@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, FolderKanban, LogOut, Menu, Settings } from "lucide-react";
+import { BarChart3, ExternalLink, FolderKanban, LogOut, Menu, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,12 @@ interface SidebarProps {
 const navItems = [
   { href: "/", label: "Projects", icon: FolderKanban },
   { href: "/settings", label: "Settings", icon: Settings },
+  {
+    href: "https://dashboards-panel.maximo-seo.ai/",
+    label: "Dashboards Panel",
+    icon: ExternalLink,
+    external: true,
+  },
 ];
 
 export function Sidebar({ userEmail }: SidebarProps) {
@@ -108,22 +114,42 @@ function NavItem({
   item,
   pathname,
 }: {
-  item: { href: string; label: string; icon: React.ElementType };
+  item: {
+    href: string;
+    label: string;
+    icon: React.ElementType;
+    external?: boolean;
+  };
   pathname: string;
 }) {
-  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const isActive =
+    !item.external &&
+    (pathname === item.href || pathname.startsWith(`${item.href}/`));
   const Icon = item.icon;
 
+  const className = cn(
+    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    isActive
+      ? "bg-primary text-primary-foreground"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+  );
+
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+      >
+        <Icon className="h-4 w-4" />
+        {item.label}
+      </a>
+    );
+  }
+
   return (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-        isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-      )}
-    >
+    <Link href={item.href} className={className}>
       <Icon className="h-4 w-4" />
       {item.label}
     </Link>
