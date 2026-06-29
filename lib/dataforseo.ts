@@ -223,37 +223,31 @@ export async function fetchKeywordResearch(
 
   const data = (await response.json()) as {
     tasks: Array<{
-      result: Array<
-        | Array<{
+      result: Array<{
+        keyword: string;
+        location_code: number;
+        language_code: string;
+        se_results_count: number;
+        items: Array<{
+          keyword_data: {
             keyword: string;
-            location_code: number;
-            language_code: string;
-            se_results_count: number;
-            items: Array<{
-              keyword_data: {
-                keyword: string;
-                keyword_info: {
-                  search_volume: number | null;
-                  cpc: number | null;
-                  competition: number | null;
-                };
-              };
-            }>;
-          }>
-        | null
-        | undefined
-      >;
+            keyword_info: {
+              search_volume: number | null;
+              cpc: number | null;
+              competition: number | null;
+            };
+          };
+        }>;
+      } | null>;
     }>;
   };
 
   const suggestions: ResearchKeyword[] = [];
 
   for (const task of data.tasks) {
-    const result = task.result?.[0];
-    if (!result || !Array.isArray(result)) continue;
-    for (const item of result) {
-      if (!item || !item.items) continue;
-      for (const keywordItem of item.items) {
+    for (const result of task.result ?? []) {
+      if (!result || !result.items) continue;
+      for (const keywordItem of result.items) {
         const info = keywordItem.keyword_data?.keyword_info;
         if (!info) continue;
         suggestions.push({
@@ -283,14 +277,11 @@ export async function saveRankings(results: SerpResult[]) {
     serp_snapshot: result.serp_snapshot as unknown as Json,
   }));
 
-  console.log("saveRankings inserting rows:", rows.length, JSON.stringify(rows[0]));
   const { error } = await supabase.from("rankings").insert(rows);
 
   if (error) {
-    console.error("saveRankings insert error:", error);
     throw new Error(`Failed to save rankings: ${error.message}`);
   }
-  console.log("saveRankings insert succeeded");
 }
 
 export async function fetchSearchVolumes(

@@ -85,8 +85,6 @@ export async function POST(request: Request) {
       ),
     ]);
 
-    console.log("check-keyword results count:", results.length, "first result:", JSON.stringify(results[0]));
-
     for (const result of results) {
       const task = tasks.find((t) => t.keyword_id === result.keyword_id);
       if (task) {
@@ -95,9 +93,7 @@ export async function POST(request: Request) {
     }
 
     await saveRankings(results);
-    console.log("saveRankings completed");
   } catch (error) {
-    console.error("check-keyword error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: `DataForSEO error: ${message}` },
