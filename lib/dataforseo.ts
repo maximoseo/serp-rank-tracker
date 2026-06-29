@@ -77,7 +77,11 @@ export async function checkKeywordsBatch(
     );
   }
 
-  const data = (await response.json()) as {
+  const raw = await response.json();
+  console.log("DataForSEO SERP raw response:", JSON.stringify(raw).slice(0, 2000));
+  const data = raw as {
+    status_code?: number;
+    status_message?: string;
     tasks: Array<{
       data: Array<{
         keyword: string;
@@ -99,12 +103,24 @@ export async function checkKeywordsBatch(
       } | null>;
       status_code: number;
       status_message: string;
-    }>;
+    } | null>;
   };
+
+  if (!Array.isArray(data.tasks) || data.tasks.length === 0) {
+    throw new Error(
+      `DataForSEO returned no tasks. status_code=${raw?.status_code ?? "n/a"}, status_message=${raw?.status_message ?? "n/a"}`
+    );
+  }
 
   const results: SerpResult[] = [];
 
   for (const task of data.tasks) {
+    if (!task) continue;
+    if (task.status_code !== 20000) {
+      throw new Error(
+        `DataForSEO task failed: status_code=${task.status_code}, message=${task.status_message}`
+      );
+    }
     const taskData = task.data[0];
 
     const matchingTask = tasks.find(
