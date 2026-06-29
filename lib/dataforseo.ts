@@ -78,16 +78,15 @@ export async function checkKeywordsBatch(
   }
 
   const raw = await response.json();
-  console.log("DataForSEO SERP raw response:", JSON.stringify(raw).slice(0, 2000));
   const data = raw as {
     status_code?: number;
     status_message?: string;
     tasks: Array<{
-      data: Array<{
+      data: {
         keyword: string;
         location_code: number;
         language_code: string;
-      }>;
+      };
       result: Array<{
         keyword: string;
         type: string;
@@ -121,7 +120,7 @@ export async function checkKeywordsBatch(
         `DataForSEO task failed: status_code=${task.status_code}, message=${task.status_message}`
       );
     }
-    const taskData = task.data[0];
+    const taskData = task.data;
 
     const matchingTask = tasks.find(
       (t) =>
