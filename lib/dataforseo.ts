@@ -284,11 +284,14 @@ export async function saveRankings(results: SerpResult[]) {
     serp_snapshot: result.serp_snapshot as unknown as Json,
   }));
 
+  console.log("saveRankings inserting rows:", rows.length, JSON.stringify(rows[0]));
   const { error } = await supabase.from("rankings").insert(rows);
 
   if (error) {
+    console.error("saveRankings insert error:", error);
     throw new Error(`Failed to save rankings: ${error.message}`);
   }
+  console.log("saveRankings insert succeeded");
 }
 
 export async function fetchSearchVolumes(
